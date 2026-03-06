@@ -14,7 +14,7 @@ def main():
 
     # Introduction text with improved styling using Streamlit's native markdown
     st.markdown("#### 📊 Check Your Diebetes Report")
-    st.image("Diabetes.jpg")
+    st.image("diabet.jpg")
 
 
 
@@ -73,3 +73,4 @@ def main():
 # Entry point for the app
 if __name__ == '__main__':
     main()
+
