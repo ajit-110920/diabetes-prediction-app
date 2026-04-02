@@ -14,14 +14,14 @@ scaler = pickle.load(open("standardScalar.pickle", 'rb'))
 # -------------------------------
 def get_connection():
     return mysql.connector.connect(
-        host="localhost",          # change when deploying to AWS (RDS endpoint)
+        host="localhost",
         user="root",
-        password="root123",   # replace with your MySQL password
+        password="yourpassword",   # 🔴 CHANGE THIS
         database="diabetes_db"
     )
 
 # -------------------------------
-# CREATE TABLE IF NOT EXISTS
+# CREATE TABLE
 # -------------------------------
 def create_table():
     conn = get_connection()
@@ -48,43 +48,69 @@ def create_table():
     conn.close()
 
 # -------------------------------
-# INSERT DATA INTO DB
+# SAFE TYPE CONVERSION FUNCTION
+# -------------------------------
+def convert_types(data, prediction):
+    clean_data = [
+        int(data[0]),
+        int(data[1]),
+        int(data[2]),
+        int(data[3]),
+        int(data[4]),
+        float(data[5]),
+        float(data[6]),
+        int(data[7])
+    ]
+    return clean_data, int(prediction)
+
+# -------------------------------
+# INSERT DATA
 # -------------------------------
 def save_to_db(data, prediction):
-    conn = get_connection()
-    cursor = conn.cursor()
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
 
-    query = """
-    INSERT INTO records 
-    (pregnancies, glucose, blood_pressure, skin_thickness, insulin, bmi, dpf, age, prediction)
-    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-    """
+        clean_data, prediction = convert_types(data, prediction)
 
-    cursor.execute(query, (*data, prediction))
+        query = """
+        INSERT INTO records 
+        (pregnancies, glucose, blood_pressure, skin_thickness, insulin, bmi, dpf, age, prediction)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """
 
-    conn.commit()
-    cursor.close()
-    conn.close()
+        cursor.execute(query, (*clean_data, prediction))
+        conn.commit()
+
+    except Exception as e:
+        st.error(f"Database Error: {e}")
+
+    finally:
+        cursor.close()
+        conn.close()
 
 # -------------------------------
-# FETCH DATA (FOR HISTORY)
+# FETCH HISTORY
 # -------------------------------
 def fetch_data():
-    conn = get_connection()
-    df = pd.read_sql("SELECT * FROM records ORDER BY created_at DESC", conn)
-    conn.close()
-    return df
+    try:
+        conn = get_connection()
+        df = pd.read_sql("SELECT * FROM records ORDER BY created_at DESC", conn)
+        return df
+    except Exception as e:
+        st.error(f"Error fetching data: {e}")
+        return pd.DataFrame()
+    finally:
+        conn.close()
 
 # -------------------------------
 # MAIN APP
 # -------------------------------
 def main():
     st.title("🩺 Diabetes Prediction Application")
-
     st.markdown("#### 📊 Check Your Diabetes Report")
     st.image("diabet.jpg")
 
-    # Ensure table exists
     create_table()
 
     # Sidebar Navigation
@@ -97,7 +123,7 @@ def main():
     if choice == "Prediction":
 
         with st.form("diabetes_form"):
-            st.subheader("**Enter your health details**")
+            st.subheader("Enter your health details")
 
             pregnancies = st.number_input("Pregnancies", 0, 20, step=1)
             glucose = st.number_input("Glucose Level (mg/dL)", 0, 300, step=1)
@@ -112,14 +138,13 @@ def main():
 
         if submitted:
             try:
-                # Prepare input
                 input_data = pd.DataFrame([[pregnancies, glucose, blood_pressure,
                                             skin_thickness, insulin, bmi, dpf, age]],
                                           columns=['Pregnancies', 'Glucose', 'BloodPressure',
                                                    'SkinThickness', 'Insulin', 'BMI',
                                                    'DiabetesPedigreeFunction', 'Age'])
 
-                # Scale
+                # Scale input
                 standardized_data = scaler.transform(input_data)
 
                 # Predict
@@ -130,10 +155,11 @@ def main():
                     pregnancies, glucose, blood_pressure,
                     skin_thickness, insulin, bmi, dpf, age
                 ]
+
                 save_to_db(input_values, prediction)
 
-                # Output
-                if prediction == 1:
+                # Show result
+                if int(prediction) == 1:
                     st.error("⚠️ Diabetes Result: POSITIVE")
                     st.markdown("### Recommended Precautions:")
                     st.write("• Monitor blood glucose regularly")
@@ -141,14 +167,13 @@ def main():
                     st.write("• Stay hydrated")
                     st.write("• Manage stress")
                     st.write("• Follow diabetic diet")
-
                 else:
                     st.success("✅ Diabetes Result: NEGATIVE")
 
                 st.balloons()
 
             except Exception as e:
-                st.error(f"Error: {e}")
+                st.error(f"Prediction Error: {e}")
 
     # -------------------------------
     # HISTORY PAGE
@@ -156,12 +181,11 @@ def main():
     elif choice == "History":
         st.subheader("📜 Prediction History")
 
-        try:
-            df = fetch_data()
+        df = fetch_data()
+        if not df.empty:
             st.dataframe(df, use_container_width=True)
-
-        except Exception as e:
-            st.error(f"Error fetching data: {e}")
+        else:
+            st.info("No records found.")
 
 
 # -------------------------------
