@@ -2,6 +2,7 @@ import streamlit as st
 import pickle
 import pandas as pd
 import mysql.connector
+import os
 
 # -------------------------------
 # LOAD MODEL & SCALER
@@ -14,10 +15,10 @@ scaler = pickle.load(open("standardScalar.pickle", 'rb'))
 # -------------------------------
 def get_connection():
     return mysql.connector.connect(
-        host="localhost",
-        user="root",
-        password="root123",   # 🔴 CHANGE THIS
-        database="diabetes_db"
+        host=os.getenv("DB_HOST", "localhost"),
+        user=os.getenv("DB_USER", "root"),
+        password=os.getenv("DB_PASSWORD", "root123"),
+        database=os.getenv("DB_NAME", "diabetes_db")
     )
 
 # -------------------------------
